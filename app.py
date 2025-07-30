@@ -18,17 +18,59 @@ st.markdown("Cette application vous permet de géocoder des adresses depuis un f
 st.header("1. Importer votre fichier de données")
 uploaded_file = st.file_uploader("Choisissez un fichier CSV", type="csv")
 
-# Le reste de l'application s'exécutera SEULEMENT si un fichier a été uploadé
+# Option pour le séparateur CSV
+csv_separator = st.selectbox(
+    "Quel est le séparateur de colonnes dans votre fichier CSV ?",
+    options=[",", ";", "\t", "|"], # Virgule, Point-virgule, Tabulation, Pipe
+    format_func=lambda x: f"Virgule (,)" if x == "," else (f"Point-virgule (;)" if x == ";" else (f"Tabulation (\\t)" if x == "\t" else "Pipe (|)"))
+)
+st.info(f"Le séparateur sélectionné est : **'{csv_separator}'**.")
+
+
+df = None # Initialise df à None
+
 if uploaded_file is not None:
     try:
-        df = pd.read_csv(uploaded_file)
+        # Tente de lire le fichier avec le séparateur choisi
+        df = pd.read_csv(uploaded_file, sep=csv_separator)
         st.success("Fichier chargé avec succès !")
-        st.write("Aperçu des 5 premières lignes de votre fichier :")
-        st.dataframe(df.head())
 
-        # --- Section de sélection des colonnes (déplacée ici !) ---
-        st.header("2. Sélectionner les colonnes")
+        # Afficher des infos de debug utiles
+        st.write("Type de l'objet chargé :", type(df))
+        if isinstance(df, pd.DataFrame):
+            st.write(f"Nombre de lignes : **{len(df)}**")
+            st.write(f"Nombre de colonnes : **{len(df.columns)}**")
+            st.write("Colonnes détectées :", df.columns.tolist())
+            st.write("Aperçu des 5 premières lignes de votre fichier :")
+            st.dataframe(df.head())
+        else:
+            st.error("Le fichier n'a pas pu être lu comme un DataFrame Pandas. Vérifiez le séparateur ou le format du fichier.")
+            df = None # S'assurer que df est None si la lecture échoue
 
+    except pd.errors.EmptyDataError:
+        st.error("Le fichier CSV est vide.")
+        df = None
+    except pd.errors.ParserError as e:
+        st.error(f"Erreur de lecture du CSV. Le fichier est peut-être mal formé ou le séparateur est incorrect. Erreur: {e}")
+        st.info("Essayez de changer le séparateur ci-dessus ou de vérifier l'intégrité de votre fichier CSV.")
+        df = None
+    except Exception as e:
+        st.error(f"Une erreur inattendue est survenue lors du chargement du fichier : {e}")
+        st.info("Veuillez vous assurer que le fichier est un CSV valide et bien formaté.")
+        df = None
+
+# Le reste de l'application s'exécutera SEULEMENT si un DataFrame df a été créé
+if df is not None:
+    st.markdown("---") # Séparateur visuel
+    st.header("2. Sélectionner les colonnes")
+
+    # Si le DataFrame est vide après lecture (e.g. seulement les en-têtes)
+    if df.empty:
+        st.warning("Le fichier a été chargé, mais il semble vide (pas de données après les en-têtes). Impossible de sélectionner des colonnes.")
+    elif len(df.columns) == 0:
+        st.warning("Aucune colonne n'a été détectée dans votre fichier CSV. Veuillez vérifier l'intégrité du fichier et le séparateur.")
+    else:
+        # Sélecteurs de colonnes (s'affichent seulement si df est valide et a des colonnes)
         col_adresse = st.selectbox(
             "Choisissez la colonne contenant les adresses à géocoder :",
             options=df.columns
@@ -131,11 +173,7 @@ if uploaded_file is not None:
                 mime="text/csv",
             )
             st.info("Le fichier CSV téléchargé inclura les colonnes Latitude, Longitude, Commune_Geocoded et Verifie_Commune.")
-
-    except Exception as e:
-        st.error(f"Erreur lors du chargement du fichier : {e}")
-        st.info("Veuillez vous assurer que le fichier est un CSV valide et bien formaté.")
-else: # Ce bloc s'affiche si aucun fichier n'a encore été uploadé
+else:
     st.info("Veuillez d'abord télécharger un fichier CSV pour commencer.")
 
 st.markdown("---")
